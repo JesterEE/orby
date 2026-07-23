@@ -70,6 +70,20 @@ Window {
     }
 
     // ════════════════════════════════════════════════════════════════
+    //  Selected executables tracking
+    //  Maps game name to selected executable
+    // ════════════════════════════════════════════════════════════════
+    property var selectedExecutables: ({})
+
+    function setSelectedExecutable(gameName, executable) {
+        selectedExecutables[gameName] = executable
+    }
+
+    function getSelectedExecutable(gameName, defaultExec) {
+        return selectedExecutables[gameName] || defaultExec
+    }
+
+    // ════════════════════════════════════════════════════════════════
     //  Filtering logic
     // ════════════════════════════════════════════════════════════════
     property var filteredGames: []
@@ -345,12 +359,15 @@ Window {
                 delegate: Rectangle {
                     id: gameTile
                     width: ListView.view.width
-                    height: 68
+                    height: executablesPopup.visible ? 68 + executablesList.height + 20 : 68
                     radius: 16
                     color: tileMouseArea.containsMouse ? md.surfaceContainerHigh : md.surfaceContainer
                     border.color: tileMouseArea.containsMouse ? md.outlineVariant : "transparent"
                     border.width: 1
 
+                    Behavior on height {
+                        NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                    }
                     Behavior on color {
                         ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
                     }
@@ -358,117 +375,244 @@ Window {
                         ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
                     }
 
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 12
-                        anchors.topMargin: 10
-                        anchors.bottomMargin: 10
+                        anchors.margins: 0
+                        spacing: 0
 
-                        // Game icon placeholder — first letter
-                        Rectangle {
-                            width: 42; height: 42
-                            radius: 12
-                            color: md.primaryContainer
-                            Layout.alignment: Qt.AlignVCenter
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.name ? modelData.name.charAt(0).toUpperCase() : "?"
-                                color: md.primaryContainerFg
-                                font.family: "Inter"
-                                font.pixelSize: 18
-                                font.weight: Font.Bold
-                            }
-                        }
-
-                        // Game info
-                        ColumnLayout {
-                            spacing: 2
+                        // Main game info row
+                        RowLayout {
                             Layout.fillWidth: true
-                            Layout.leftMargin: 12
+                            Layout.preferredHeight: 68
+                            Layout.leftMargin: 16
+                            Layout.rightMargin: 12
+                            Layout.topMargin: 10
+                            Layout.bottomMargin: 10
 
-                            Text {
-                                text: modelData.name
-                                color: md.surfaceFg
-                                font.family: "Inter"
-                                font.pixelSize: 14
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
+                            // Game icon placeholder — first letter
+                            Rectangle {
+                                width: 42; height: 42
+                                radius: 12
+                                color: md.primaryContainer
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.name ? modelData.name.charAt(0).toUpperCase() : "?"
+                                    color: md.primaryContainerFg
+                                    font.family: "Inter"
+                                    font.pixelSize: 18
+                                    font.weight: Font.Bold
+                                }
                             }
-                            Text {
-                                text: modelData.primaryExecutable
-                                color: md.outline
-                                font.family: "Inter"
-                                font.pixelSize: 12
-                                elide: Text.ElideRight
+
+                            // Game info
+                            ColumnLayout {
+                                spacing: 2
                                 Layout.fillWidth: true
+                                Layout.leftMargin: 12
+
+                                Text {
+                                    text: modelData.name
+                                    color: md.surfaceFg
+                                    font.family: "Inter"
+                                    font.pixelSize: 14
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    id: executableLabel
+                                    text: getSelectedExecutable(modelData.name, modelData.primaryExecutable)
+                                    color: md.outline
+                                    font.family: "Inter"
+                                    font.pixelSize: 12
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            // Executable selector button (only show if multiple executables)
+                            Button {
+                                id: execSelectorBtn
+                                visible: modelData.executables.length > 1
+                                text: "⋮"
+                                font.pixelSize: 16
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 36
+                                Layout.alignment: Qt.AlignVCenter
+
+                                background: Rectangle {
+                                    radius: 18
+                                    color: parent.hovered ? md.surfaceContainerHighest : "transparent"
+                                    border.color: executablesPopup.visible ? md.primary : "transparent"
+                                    border.width: executablesPopup.visible ? 1 : 0
+                                    Behavior on color { ColorAnimation { duration: 200 } }
+                                    Behavior on border.color { ColorAnimation { duration: 200 } }
+                                }
+
+                                contentItem: Text {
+                                    text: execSelectorBtn.text
+                                    color: md.surfaceVariantFg
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font: execSelectorBtn.font
+                                }
+
+                                onClicked: {
+                                    executablesPopup.visible = !executablesPopup.visible
+                                }
+                            }
+
+                            // Spoof / Active button
+                            Button {
+                                id: spoofBtn
+                                property bool isActive: spoofer.currentProcessName === getSelectedExecutable(modelData.name, modelData.primaryExecutable) && spoofer.isSpoofing
+
+                                text: isActive ? "Active" : "Spoof"
+                                enabled: !isActive
+                                font.family: "Inter"
+                                font.weight: Font.DemiBold
+                                font.pixelSize: 13
+                                Layout.preferredWidth: 78
+                                Layout.preferredHeight: 36
+                                Layout.alignment: Qt.AlignVCenter
+
+                                background: Rectangle {
+                                    radius: 18
+                                    color: {
+                                        if (spoofBtn.isActive)
+                                            return md.tertiaryContainer
+                                        if (spoofBtn.hovered)
+                                            return md.primaryContainer
+                                        return md.surfaceContainerHighest
+                                    }
+                                    border.color: {
+                                        if (spoofBtn.isActive)
+                                            return md.tertiary
+                                        if (spoofBtn.hovered)
+                                            return md.primary
+                                        return md.outlineVariant
+                                    }
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
+                                    }
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
+                                    }
+                                }
+
+                                contentItem: Text {
+                                    text: spoofBtn.text
+                                    color: {
+                                        if (spoofBtn.isActive)
+                                            return md.tertiary
+                                        if (spoofBtn.hovered)
+                                            return md.primary
+                                        return md.surfaceVariantFg
+                                    }
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font: spoofBtn.font
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
+                                    }
+                                }
+
+                                onClicked: {
+                                    let selectedExec = getSelectedExecutable(modelData.name, modelData.primaryExecutable)
+                                    spoofer.startSpoofing(selectedExec,
+                                                          modelData.name,
+                                                          modelData.steamAppId ?? "")
+                                }
                             }
                         }
 
-                        // Spoof / Active button
-                        Button {
-                            id: spoofBtn
-                            property bool isActive: spoofer.currentProcessName === modelData.primaryExecutable && spoofer.isSpoofing
+                        // Executables dropdown (expanded when button clicked)
+                        Rectangle {
+                            id: executablesPopup
+                            visible: false
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: visible ? executablesList.contentHeight + 16 : 0
+                            Layout.leftMargin: 16
+                            Layout.rightMargin: 12
+                            Layout.bottomMargin: 10
+                            color: md.surfaceContainerHighest
+                            radius: 12
+                            clip: true
 
-                            text: isActive ? "Active" : "Spoof"
-                            enabled: !isActive
-                            font.family: "Inter"
-                            font.weight: Font.DemiBold
-                            font.pixelSize: 13
-                            Layout.preferredWidth: 78
-                            Layout.preferredHeight: 36
-                            Layout.alignment: Qt.AlignVCenter
-
-                            background: Rectangle {
-                                radius: 18
-                                color: {
-                                    if (spoofBtn.isActive)
-                                        return md.tertiaryContainer
-                                    if (spoofBtn.hovered)
-                                        return md.primaryContainer
-                                    return md.surfaceContainerHighest
-                                }
-                                border.color: {
-                                    if (spoofBtn.isActive)
-                                        return md.tertiary
-                                    if (spoofBtn.hovered)
-                                        return md.primary
-                                    return md.outlineVariant
-                                }
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
-                                }
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
-                                }
+                            Behavior on Layout.preferredHeight {
+                                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                             }
 
-                            contentItem: Text {
-                                text: spoofBtn.text
-                                color: {
-                                    if (spoofBtn.isActive)
-                                        return md.tertiary
-                                    if (spoofBtn.hovered)
-                                        return md.primary
-                                    return md.surfaceVariantFg
-                                }
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font: spoofBtn.font
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 6
 
-                                Behavior on color {
-                                    ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
+                                Text {
+                                    text: "Select Executable:"
+                                    color: md.surfaceVariantFg
+                                    font.family: "Inter"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Medium
+                                    Layout.fillWidth: true
                                 }
-                            }
 
-                            onClicked: {
-                                spoofer.startSpoofing(modelData.primaryExecutable,
-                                                      modelData.name,
-                                                      modelData.steamAppId ?? "")
+                                ColumnLayout {
+                                    id: executablesList
+                                    Layout.fillWidth: true
+                                    spacing: 4
+
+                                    Repeater {
+                                        model: modelData.executables
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 32
+                                            radius: 8
+                                            color: {
+                                                let selected = getSelectedExecutable(modelData.name, modelData.primaryExecutable)
+                                                return modelData === selected ? md.primaryContainer : md.surfaceContainer
+                                            }
+                                            border.color: execMouseArea.containsMouse ? md.primary : "transparent"
+                                            border.width: 1
+
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData
+                                                color: {
+                                                    let selected = getSelectedExecutable(gameTile.modelData.name, gameTile.modelData.primaryExecutable)
+                                                    return modelData === selected ? md.primaryContainerFg : md.surfaceFg
+                                                }
+                                                font.family: "Inter"
+                                                font.pixelSize: 12
+                                                font.weight: Font.Medium
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+
+                                            MouseArea {
+                                                id: execMouseArea
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    setSelectedExecutable(gameTile.modelData.name, modelData)
+                                                    executablesPopup.visible = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
