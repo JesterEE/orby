@@ -1,9 +1,9 @@
-name: Build & Release
+name: Feat Test Build & Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - "feat*"
 
 permissions:
   contents: write
@@ -70,64 +70,10 @@ jobs:
             orby-linux-x86_64.zip
             *.AppImage
 
-  build-windows:
-    name: Build Windows
-    runs-on: windows-2022
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.8.0"
-          cache: true
-
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Deploy Qt
-        shell: powershell
-        run: |
-          mkdir package
-
-          Copy-Item build\Release\Orby-Windows.exe package\
-          Copy-Item build\Release\dummy.exe package\
-
-          windeployqt `
-            --release `
-            --qmldir qml `
-            --no-translations `
-            package\Orby-Windows.exe
-
-          if (Test-Path README.md) {
-            Copy-Item README.md package\
-          }
-
-          if (Test-Path LICENSE) {
-            Copy-Item LICENSE package\
-          }
-
-      - name: Zip
-        shell: powershell
-        run: |
-          Compress-Archive `
-            -Path package\* `
-            -DestinationPath orby-windows-x86_64.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: orby-windows-x86_64.zip
-
   release:
-    name: Publish Release
+    name: Publish Pre-Release
     needs:
       - build-linux
-      - build-windows
 
     runs-on: ubuntu-latest
 
@@ -139,5 +85,4 @@ jobs:
         with:
           files: |
             linux/orby-linux-x86_64.zip
-            windows/orby-windows-x86_64.zip
             linux/*.AppImage
